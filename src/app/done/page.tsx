@@ -2,22 +2,25 @@
 
 import Link from "next/link";
 
-// 1. (สำคัญมาก) ตรวจสอบว่า "ไม่มี" 'use client'; ที่บรรทัดบนสุด
-// 2. (สำคัญมาก) ตรวจสอบว่า "ไม่มี" 'async' ที่หน้าฟังก์ชัน
+// 1. (สำคัญมาก) ต้องไม่มี "use client"; ที่บรรทัดบนสุด
+//    เพราะเราจะใช้ props ที่ส่งมาจาก Server
 
-// 3. กำหนด Type ให้ถูกต้องตามมาตรฐาน Next.js
+// 2. นี่คือ Type ที่ถูกต้อง 100% ตามมาตรฐาน Next.js
+//    มันบอกว่า searchParams เป็น object ที่:
+//    - key เป็น string (รองรับ query param ทุกชื่อ)
+//    - value เป็น string, หรือ array ของ string, หรือ undefined
 type DonePageProps = {
   params: { [key: string]: string | string[] | undefined };
   searchParams: { [key: string]: string | string[] | undefined };
 };
 
-// 4. ใช้ DonePageProps นี้
+// 3. ใช้ DonePageProps นี้
 export default function DonePage({ searchParams }: DonePageProps) {
-  // 5. เนื่องจาก searchParams.status อาจเป็น Array ได้
-  // เราจึงต้องมีโค้ดดักจับมันไว้
+  // 4. ดึงค่า status ออกมา
+  //    เราต้องเช็คเผื่อว่ามันมาเป็น Array (เช่น ?status=timeout&status=other)
   const status = Array.isArray(searchParams.status)
     ? searchParams.status[0] // ถ้าเป็น Array, เอาแค่ตัวแรก
-    : searchParams.status; // ถ้าไม่ใช่, ก็ใช้ค่านั้น
+    : searchParams.status; // ถ้าไม่ใช่ (เป็น string หรือ undefined), ก็ใช้ได้เลย
 
   let message = "ส่งคำตอบเรียบร้อยแล้ว";
   if (status === "timeout") {
