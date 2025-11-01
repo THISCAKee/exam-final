@@ -1,21 +1,23 @@
 // app/done/page.tsx
 
-// 1. ลบ "use client"; ออก (ถ้ามี)
-// 2. ลบ import { useSearchParams } ... ออก (ถ้ามี)
-
 import Link from "next/link";
 
-// 3. กำหนดประเภทของ props ที่จะรับ
+// 1. (สำคัญมาก) ตรวจสอบว่า "ไม่มี" 'use client'; ที่บรรทัดบนสุด
+// 2. (สำคัญมาก) ตรวจสอบว่า "ไม่มี" 'async' ที่หน้าฟังก์ชัน
+
+// 3. กำหนด Type ให้ถูกต้องตามมาตรฐาน Next.js
 type DonePageProps = {
-  searchParams: {
-    status?: string; // status อาจจะไม่มี, หรือเป็น string
-  };
+  params: { [key: string]: string | string[] | undefined };
+  searchParams: { [key: string]: string | string[] | undefined };
 };
 
-// 4. เปลี่ยนฟังก์ชันให้รับ props ที่ชื่อ searchParams
+// 4. ใช้ DonePageProps นี้
 export default function DonePage({ searchParams }: DonePageProps) {
-  // 5. ดึงค่า status ออกมาจาก props ได้เลย
-  const status = searchParams.status;
+  // 5. เนื่องจาก searchParams.status อาจเป็น Array ได้
+  // เราจึงต้องมีโค้ดดักจับมันไว้
+  const status = Array.isArray(searchParams.status)
+    ? searchParams.status[0] // ถ้าเป็น Array, เอาแค่ตัวแรก
+    : searchParams.status; // ถ้าไม่ใช่, ก็ใช้ค่านั้น
 
   let message = "ส่งคำตอบเรียบร้อยแล้ว";
   if (status === "timeout") {
@@ -29,7 +31,6 @@ export default function DonePage({ searchParams }: DonePageProps) {
           ดำเนินการเสร็จสิ้น
         </h1>
 
-        {/* 6. แสดง message ได้ตามปกติ */}
         <p className="text-lg mb-6 text-black">{message}</p>
 
         <Link
