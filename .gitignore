@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Share the template only; keep credentials local
+!.env.example
+
+# Persistent exam identities, attempts and delivery queue
+/.data/

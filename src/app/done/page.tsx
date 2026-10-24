@@ -15,8 +15,9 @@ export default async function DonePage({
           ดำเนินการเสร็จสิ้น
         </h1>
 
-        <p className="text-lg mb-6 text-black">{status}</p>
+        <p className="text-lg mb-6 text-black">{status === "timeout" ? "หมดเวลาสอบ บันทึกผลสอบแล้ว" : status === "exited" ? "สิ้นสุดการสอบเนื่องจากออกจากโปรแกรม" : "บันทึกผลสอบแล้ว"}</p>
 
+        <p className="mb-6 text-sm text-red-700">คุณใช้สิทธิ์สอบแล้ว ชื่อ–นามสกุลหรือรหัสนิสิตเดิมไม่สามารถเข้าสอบใหม่ได้</p>
         <Link
           href="/"
           className="py-2 px-4 bg-indigo-600 text-white font-semibold rounded-md shadow hover:bg-indigo-700"

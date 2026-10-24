@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { Anuphan } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const anuphan = Anuphan({
+const anuphan = localFont({
+  src: "./fonts/Anuphan-Variable.ttf",
   variable: "--font-anuphan",
-  subsets: ["thai", "latin"],
-  weight: ["100", "200", "300", "400", "500", "600", "700"],
+  weight: "100 700",
+  style: "normal",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -19,8 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th">
-      <body className={`${anuphan.variable} font-sans antialiased`}>
+    <html lang="th" className={anuphan.variable}>
+      <body className={`${anuphan.className} antialiased`}>
         {children}
       </body>
     </html>

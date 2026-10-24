@@ -1,8 +1,9 @@
 // app/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { ATTEMPT_TOKEN_KEY, examRequest } from "./lib/exam-session";
 
 export default function Home() {
   const [firstName, setFirstName] = useState("");
@@ -11,26 +12,29 @@ export default function Home() {
   const [section, setSection] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
+  const [isStarting, setIsStarting] = useState(false);
+  const starting = useRef(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName || !lastName || !studentId || !section) {
+    if (starting.current) return;
+    if (!firstName.trim() || !lastName.trim() || !studentId.trim() || !section.trim()) {
       setError("กรุณากรอกข้อมูลให้ครบทุกช่อง");
       return;
     }
-
-    // เก็บข้อมูลผู้ใช้ไว้ใน localStorage เพื่อนำไปใช้หน้าถัดไป
-    // นี่เป็นวิธีง่ายๆ (วิธีที่ดีกว่าคือใช้ state management)
+    starting.current = true;
+    setIsStarting(true);
+    setError("");
     try {
-      localStorage.setItem(
-        "examUser",
-        JSON.stringify({ firstName, lastName, studentId, section }),
-      );
-      // ไปยังหน้าข้อสอบ
+      const result = await examRequest<{ token: string }>("start", {
+        firstName, lastName, studentId, section,
+      });
+      sessionStorage.setItem(ATTEMPT_TOKEN_KEY, result.token);
       router.push("/exam");
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (err) {
-      setError("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "ไม่สามารถเริ่มสอบได้");
+      starting.current = false;
+      setIsStarting(false);
     }
   };
 
@@ -40,6 +44,8 @@ export default function Home() {
         <h1 className="text-2xl font-bold mb-6 text-center">
           ระบบทำข้อสอบออนไลน์
         </h1>
+        <p className="mb-4 text-center text-gray-700">ข้อสอบ 80 ข้อ คะแนนเต็ม 80 คะแนน เวลา 60 นาที</p>
+        <p className="mb-4 text-sm text-red-700">เข้าสอบได้ครั้งเดียว เมื่อส่งคำตอบ หมดเวลา ปิดหน้าเว็บ หรือรีเฟรช จะไม่สามารถเข้าสอบใหม่ได้</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
@@ -101,12 +107,13 @@ export default function Home() {
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
           <button
             type="submit"
+            disabled={isStarting}
             className="w-full py-2 px-4 bg-indigo-600 text-white font-semibold rounded-md shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            เริ่มทำข้อสอบ
+            {isStarting ? "กำลังตรวจสอบสิทธิ์สอบ..." : "เริ่มทำข้อสอบ"}
           </button>
         </form>
       </div>

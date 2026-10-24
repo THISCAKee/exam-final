@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ระบบสอบออนไลน์ 80 ข้อ
 
-## Getting Started
+Next.js 16 / React 19 ใช้คำถามจาก `Student_Exam_80Q.docx` และเฉลยจาก `Teacher_Answer_Key.pdf` คะแนนเต็ม 80 คะแนน เวลา 60 นาที สุ่มลำดับคำถามฝั่งเซิร์ฟเวอร์ บันทึกคำตอบในฐานข้อมูลทุกครั้งที่เลือก และเข้าสอบได้เพียงครั้งเดียว
 
-First, run the development server:
+## เริ่มใช้งาน
+
+ใช้ Node.js 22.20 ขึ้นไป
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+หากตั้งค่า `.env.local` แล้ว ไม่ต้องคัดลอกทับ
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## เชื่อม Google Sheets
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+ปลายทาง: [Exam_Final แท็บ exam-final-69](https://docs.google.com/spreadsheets/d/13NQODP2AuJpSjrlBAYSP1Nn2qDJ7XfA-HYUEqviODnE/edit?gid=1872488623#gid=1872488623)
 
-## Learn More
+1. เปิด Google Sheets API ใน Google Cloud project ของ Service Account
+2. สร้างหรือใช้ Service Account ที่มีอยู่ และดาวน์โหลด JSON key มาเก็บไว้นอก repository
+3. แชร์สเปรดชีตให้ `client_email` ของ Service Account ด้วยสิทธิ์ Editor
+4. ตั้งค่าโดยระบุไฟล์ JSON บนเครื่อง:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+node scripts/configure-google.mjs /absolute/path/service-account.json
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+สคริปต์จะสร้าง `.env.local` และไม่พิมพ์ private key ออกทางหน้าจอ ไฟล์นี้ถูก gitignore ไว้แล้ว หากนำขึ้นโฮสต์ ให้เพิ่มตัวแปรทั้ง 4 จาก `.env.example` ใน environment ของโฮสต์ ห้ามใช้คำนำหน้า `NEXT_PUBLIC_` กับ credentials
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+API เลือกแท็บด้วย `GOOGLE_SHEET_GID=1872488623` จึงไม่บันทึกลง Sheet1 โดยผิดพลาด แม้ชื่อแท็บจะเปลี่ยน ระบบตรวจหัวตารางก่อนเขียน และเติมหัว Q61–Q80 ให้แท็บเก่าที่มี Q1–Q60 ได้
 
-## Deploy on Vercel
+คอลัมน์ A–CH: `Timestamp, FirstName, LastName, StudentID, Section, Score, Q1, …, Q80` คะแนนเป็นตัวเลข ส่วนรหัสนิสิตและกลุ่มเรียนเก็บเป็นข้อความเพื่อรักษาเลขศูนย์นำหน้า คำตอบ Q1–Q80 เรียงตามเลขข้อในเอกสารต้นฉบับ แม้ผู้สอบจะได้รับคำถามคนละลำดับ
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+ระบบเริ่มสอบผ่าน `/api/attempts/start` และล็อกสิทธิ์ทันทีเมื่อบันทึกรอบสอบสำเร็จ ตรวจชื่อ–นามสกุลเต็มหรือรหัสนิสิตที่ซ้ำกัน โดยจัดรูปแบบตัวอักษรและช่องว่างก่อนเปรียบเทียบ ชื่อจริงที่เหมือนกันแต่นามสกุลต่างกันยังสอบได้
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+เซิร์ฟเวอร์ออก token, สุ่มลำดับคำถาม และกำหนด deadline ผู้สอบใช้ token เรียกรอบเดิมในหน้าเดียวได้เท่านั้น การเปิดหน้าใหม่ รีเฟรช ส่งคำตอบ หรือหมดเวลา จะไม่คืนสิทธิ์สอบ แม้ล้างข้อมูลเบราว์เซอร์หรือเปลี่ยนเครื่อง
+
+API บันทึกคำตอบลง SQLite และตรวจคะแนนจากเฉลยฝั่งเซิร์ฟเวอร์ ใช้ชื่อ รหัสนิสิต ลำดับข้อ และเวลาจากฐานข้อมูล การส่งซ้ำหลังจบสอบไม่แก้คำตอบเดิม ผลสอบที่เก็บลงฐานข้อมูลแล้วจะเข้าคิวส่ง Google Sheets หากชีตไม่พร้อม ระบบยังล็อกสิทธิ์ไว้และลองส่งใหม่ขณะเซิร์ฟเวอร์รัน คอลัมน์ CI ชื่อ `AttemptID` ใช้ค้นหาแถวเดิมก่อนส่งซ้ำ เพื่อลดแถวคะแนนซ้ำกรณีเครือข่ายขัดข้อง
+
+## ตรวจสอบ
+
+```bash
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+ทดสอบการบันทึกจริงด้วยข้อมูลทดสอบที่ระบุชัดเจน แล้วตรวจว่าได้คะแนนที่คาดไว้และคำตอบตรงกับคอลัมน์ Q1–Q80 การทดสอบอัตโนมัติจำลองเฉพาะการเรียก Google API จึงยังไม่ยืนยันสิทธิ์เข้าถึงชีตจริง
+
+## ที่เก็บสิทธิ์สอบและการติดตั้ง
+
+ต้องใช้ Node.js 22.20 ขึ้นไป บนเครื่องหรือเซิร์ฟเวอร์ที่มีดิสก์ถาวร เก็บฐานข้อมูลที่ `.data/exam.sqlite` (ถูก gitignore) หรือกำหนด `EXAM_DB_PATH` เป็นพาธดิสก์ถาวร แอปหลายโปรเซสบนเครื่องเดียวกันต้องใช้ไฟล์ฐานข้อมูลเดียวกัน เก็บรักษาและสำรองทั้งโฟลเดอร์ `.data` การลบฐานข้อมูลทำให้ข้อมูลสิทธิ์สอบหาย
+
+การติดตั้งแบบ Vercel หรือหลายเซิร์ฟเวอร์ที่ไม่ได้แชร์ฐานข้อมูลนี้ยังไม่รองรับ ต้องเปลี่ยนไปใช้ฐานข้อมูลส่วนกลางที่มี unique constraint ก่อน ระบบจะปฏิเสธการเริ่มสอบบน Vercel เพื่อป้องกันข้อมูลล็อกสูญหาย
+
+เมื่อออกจากหน้าเว็บ เบราว์เซอร์จะส่ง exit beacon พร้อมคำตอบล่าสุด โดยรีเฟรชถือว่าสิ้นสุดการสอบ การเปลี่ยนแท็บอย่างเดียวไม่ส่ง exit แต่ถ้าเซิร์ฟเวอร์ไม่ได้รับ heartbeat ต่อเนื่อง 60 วินาทีจะถือว่าขาดการเชื่อมต่อและจบรอบสอบ เซิร์ฟเวอร์ตรวจรอบที่หมดเวลาและขาดการเชื่อมต่อทุก 15 วินาที ข้อความ “บันทึกผลสอบแล้ว” หมายถึงเก็บผลถาวรใน SQLite แล้ว การส่งออกชีตอาจอยู่ระหว่างรอ
+
+การปิดโปรแกรมอย่างฉับพลันอาจไม่ส่งเหตุการณ์ปิดหน้า จึงล็อกสิทธิ์ตั้งแต่เริ่มและใช้ heartbeat แทนการพึ่งเหตุการณ์ปิดอย่างเดียว ดู [ข้อจำกัดของ pagehide](https://developer.mozilla.org/en-US/docs/Web/API/Window/pagehide_event)
+
+เอกสาร API: [การเพิ่มแถว](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/append), [ข้อมูลแท็บ](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/get)
