@@ -45,7 +45,7 @@ export default function Home() {
           ระบบทำข้อสอบออนไลน์
         </h1>
         <p className="mb-4 text-center text-gray-700">ข้อสอบ 80 ข้อ คะแนนเต็ม 80 คะแนน เวลา 60 นาที</p>
-        <p className="mb-4 text-sm text-red-700">เข้าสอบได้ครั้งเดียว เมื่อส่งคำตอบ หมดเวลา ปิดหน้าเว็บ หรือรีเฟรช จะไม่สามารถเข้าสอบใหม่ได้</p>
+        <p className="mb-4 text-sm text-red-700">ชื่อ–นามสกุลหรือรหัสนิสิตที่มีผลสอบใน Google Sheets แล้ว ไม่สามารถเข้าสอบซ้ำได้</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label

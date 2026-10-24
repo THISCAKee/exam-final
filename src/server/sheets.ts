@@ -6,6 +6,37 @@ export interface SheetConfig {
   worksheetId: number;
 }
 
+export class SheetEligibilityError extends Error { status = 409; }
+const normalizeIdentity = (value: unknown) => String(value ?? '').normalize('NFKC').replace(/\s+/gu, '').toLowerCase();
+
+// Check the configured results tab, including legacy sheets with only 60 questions.
+// true means this exact attempt was already saved (safe submission retry).
+export async function checkSheetEligibility(
+  sheets: sheets_v4.Sheets, config: SheetConfig,
+  identity: { firstName: string; lastName: string; studentId: string }, attemptId?: string,
+): Promise<boolean> {
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId: config.spreadsheetId,
+    fields: 'sheets.properties(sheetId,title,gridProperties.columnCount)' });
+  const target = metadata.data.sheets?.find(s => s.properties?.sheetId === config.worksheetId)?.properties;
+  if (!target?.title) throw new Error('Configured worksheet gid was not found');
+  const tab = `'${target.title.replace(/'/g, "''")}'`;
+  const lastColumn = (target.gridProperties?.columnCount ?? 0) >= 87 ? 'CI' : 'D';
+  const response = await sheets.spreadsheets.values.get({ spreadsheetId: config.spreadsheetId, range: `${tab}!A:${lastColumn}` });
+  const [headers = [], ...rows] = response.data.values ?? [];
+  const required = ['Timestamp', 'FirstName', 'LastName', 'StudentID'];
+  if (headers.length && required.some((value, i) => headers[i] !== value)) throw new Error('Worksheet identity headers do not match');
+  let saved = false;
+  for (const row of rows) {
+    const sameId = normalizeIdentity(row[3]) === normalizeIdentity(identity.studentId);
+    const sameName = normalizeIdentity(row[1]) === normalizeIdentity(identity.firstName) &&
+      normalizeIdentity(row[2]) === normalizeIdentity(identity.lastName);
+    if (!sameId && !sameName) continue;
+    if (attemptId && headers[86] === 'AttemptID' && row[86] === attemptId) { saved = true; continue; }
+    throw new SheetEligibilityError('ชื่อ–นามสกุลหรือรหัสนิสิตนี้ใช้สิทธิ์สอบแล้ว ไม่สามารถเข้าสอบซ้ำได้');
+  }
+  return saved;
+}
+
 export async function appendResult(
   sheets: sheets_v4.Sheets,
   config: SheetConfig,

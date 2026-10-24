@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { allQuestions, optionKeys } from '../lib/questions';
-import { ATTEMPT_TOKEN_KEY, examRequest, ExamRequestError, type ExamSession } from '../lib/exam-session';
+import { ATTEMPT_TOKEN_KEY, examRequest, type ExamSession } from '../lib/exam-session';
 
 export default function ExamPage() {
   const router = useRouter();
   const [session, setSession] = useState<ExamSession | null>(null);
   const active = useRef<ExamSession | null>(null);
   const pageId = useRef<string | null>(null);
+  const entryToken = useRef<string | null>(null);
   const finished = useRef(false);
   const submitting = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,27 +40,11 @@ export default function ExamPage() {
     }
   }, [router]);
 
-  const save = useCallback(async () => {
-    const current = active.current;
-    if (!current || finished.current || submitting.current) return;
-    try {
-      await examRequest('save', current);
-      if (mounted.current) setError('');
-    } catch (cause) {
-      if (!mounted.current || finished.current || submitting.current) return;
-      if (cause instanceof ExamRequestError && cause.status === 409) {
-        // Finalize idempotently to display the server's timeout/exit status.
-        void finish();
-      } else {
-        setError('ยังบันทึกคำตอบล่าสุดไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต ระบบจะลองส่งอีกครั้ง');
-      }
-    }
-  }, [finish]);
-
   useEffect(() => {
     mounted.current = true;
     pageId.current ??= crypto.randomUUID();
-    const token = sessionStorage.getItem(ATTEMPT_TOKEN_KEY);
+    entryToken.current ??= sessionStorage.getItem(ATTEMPT_TOKEN_KEY);
+    const token = entryToken.current;
     if (!token) { router.replace('/'); return; }
     // Repeated initialization by React Strict Mode uses the same page ID.
     void examRequest<Omit<ExamSession, 'token' | 'pageId'>>('claim', { token, pageId: pageId.current })
@@ -67,6 +52,7 @@ export default function ExamPage() {
         if (!mounted.current || active.current) return;
         const next = { ...result, token, pageId: pageId.current! };
         active.current = next;
+        sessionStorage.removeItem(ATTEMPT_TOKEN_KEY);
         setSession(next);
         setRemaining(Math.max(0, Math.ceil((next.deadline - Date.now()) / 1000)));
       }).catch(cause => {
@@ -77,7 +63,7 @@ export default function ExamPage() {
     const leave = () => {
       const current = active.current;
       if (!current || finished.current || submitting.current) return;
-      // This reserves no new attempt. The server already locked eligibility at start.
+      // Best effort on departure; normal submission waits for a confirmed Sheets write.
       const data = JSON.stringify(current);
       if (!navigator.sendBeacon('/api/attempts/exit', new Blob([data], { type: 'application/json' }))) {
         void fetch('/api/attempts/exit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true });
@@ -102,9 +88,8 @@ export default function ExamPage() {
       setRemaining(seconds);
       if (seconds === 0 && !autoSubmitted.current) { autoSubmitted.current = true; void finish(); }
     }, 1000);
-    const heartbeat = setInterval(() => { void save(); }, 15000);
-    return () => { clearInterval(timer); clearInterval(heartbeat); };
-  }, [deadline, finish, save]);
+    return () => { clearInterval(timer); };
+  }, [deadline, finish]);
 
   const select = (choice: string) => {
     const current = active.current;
@@ -114,7 +99,6 @@ export default function ExamPage() {
     const next = { ...current, userAnswers: answers, revision: current.revision + 1 };
     active.current = next;
     setSession(next);
-    void save();
   };
 
   if (blocked) return <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-black bg-gray-100"><p role="alert">{error}</p><button className="rounded bg-indigo-600 px-5 py-3 text-white" onClick={() => router.replace('/')}>กลับหน้าแรก</button></main>;
@@ -131,7 +115,7 @@ export default function ExamPage() {
         </div>
       </header>
       <main className="container mx-auto p-4 sm:p-6">
-        <p className="mb-4 text-sm text-red-700">ปิดหน้าเว็บหรือรีเฟรชถือว่าสิ้นสุดการสอบ และไม่สามารถเข้าสอบใหม่ได้</p>
+        <p className="mb-4 text-sm text-red-700">คำตอบยังไม่บันทึกจนกว่าจะส่งข้อสอบ กรุณาส่งคำตอบก่อนปิดหน้าเว็บหรือรีเฟรช</p>
         {error && <div role="alert" className="mb-4 rounded bg-red-50 p-4 text-red-800"><p>{error}</p><button className="mt-2 rounded bg-indigo-600 px-4 py-2 text-white" onClick={() => void finish()}>ส่งคำตอบอีกครั้ง</button></div>}
         <div className="rounded-lg bg-white p-5 shadow-lg sm:p-8">
           <h2 className="mb-6 text-xl font-semibold">{question.question}</h2>

@@ -1,10 +1,11 @@
 import 'server-only';
-import { after, NextRequest, NextResponse } from 'next/server';
-import { AttemptError } from './attempts';
+import { NextRequest, NextResponse } from 'next/server';
+import { SheetEligibilityError } from './sheets';
+import { SessionError } from './sheet-session';
 import { SubmissionValidationError } from './grading';
-import { attempts, syncResults } from './exam-service';
+import { sheetExam } from './sheet-exam-service';
 
-type Action = 'start' | 'claim' | 'save' | 'exit' | 'submit';
+type Action = 'start' | 'claim' | 'exit' | 'submit';
 export async function attemptAction(req: NextRequest, action: Action) {
   try {
     const origin = req.headers.get('origin');
@@ -13,26 +14,23 @@ export async function attemptAction(req: NextRequest, action: Action) {
     try { data = await req.json(); }
     catch { return NextResponse.json({ error: 'ข้อมูลคำขอไม่ถูกต้อง' }, { status: 400 }); }
     if (!data || typeof data !== 'object') return NextResponse.json({error:'ข้อมูลไม่ถูกต้อง'}, {status:400});
-    const store = await attempts();
+    const store = sheetExam();
     let result;
     switch (action) {
       case 'start': result = await store.start(data); break;
-      case 'claim': result = await store.claim(data.token, data.pageId); break;
-      case 'save': result = await store.save(data.token, data.pageId, data.userAnswers, data.revision); break;
+      case 'claim': result = store.claim(data.token); break;
       case 'exit':
       case 'submit':
-        result = await store.finish(data.token, data.pageId, action === 'exit' ? 'exited' : 'completed', data.userAnswers, data.revision);
+        result = await store.finish(data.token, data.userAnswers, action === 'exit' ? 'exited' : 'completed');
         break;
     }
-    // A durable result is final even if Google Sheets needs a retry.
-    after(async () => { await syncResults(); });
     return NextResponse.json({ success: true, attempt: result }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    if (error instanceof AttemptError) {
-      return NextResponse.json({ error: 'ชื่อ–นามสกุลหรือรหัสนิสิตนี้ใช้สิทธิ์สอบแล้ว หรือรอบสอบสิ้นสุดแล้ว ไม่สามารถเข้าสอบใหม่ได้' }, { status: error.status });
+    if (error instanceof SheetEligibilityError || error instanceof SessionError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     if (error instanceof SubmissionValidationError) return NextResponse.json({error:error.message}, {status:400});
     console.error('Attempt request failed');
-    return NextResponse.json({ error: 'ระบบบันทึกสิทธิ์สอบไม่พร้อมใช้งาน กรุณาติดต่อผู้คุมสอบ' }, { status: 503 });
+    return NextResponse.json({ error: 'ติดต่อ Google Sheets ไม่สำเร็จ กรุณาลองอีกครั้งหรือติดต่อผู้คุมสอบ' }, { status: 503 });
   }
 }
